@@ -1,0 +1,40 @@
+version: '3.8'
+services:
+  # MySQL Database container
+  db:
+    image: mysql:8.0
+    container_name: minibanking-db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: minibanking
+    ports:
+      - "3306:3306"
+    volumes:
+      # Maps our init.sql file into a special directory that mysql executes on startup
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      # Persists data even if the container is stopped
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Spring Boot Application container
+  app:
+    build: .
+    container_name: minibanking-app
+    ports:
+      - "8080:8080"
+    environment:
+      # Tells Spring Boot to connect to the 'db' service instead of 'localhost'
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_NAME=minibanking
+      - DB_USER=root
+      - DB_PASSWORD=root
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:
