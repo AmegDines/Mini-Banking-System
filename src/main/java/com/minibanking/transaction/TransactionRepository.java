@@ -8,6 +8,5 @@ import java.util.List;
 @Repository
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
     
-    // Spring Data JPA can automatically implement this query based on the method name
-    List<Transaction> findByFromAccountIdOrToAccountIdOrderByTimestampDesc(Long fromAccountId, Long toAccountId);
+    List<Transaction> findBySenderAccNoOrReceiverAccNoOrderByTimestampDesc(String senderAccNo, String receiverAccNo);
 }

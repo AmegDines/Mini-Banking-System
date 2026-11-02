@@ -1,74 +1,33 @@
 package com.minibanking.account;
 
+import com.minibanking.user.User;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.PositiveOrZero;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 
-/**
- * AccountController exposes REST API endpoints.
- * @RestController is @Controller + @ResponseBody (returns data directly, usually JSON).
- * @RequestMapping("/api/accounts") sets the base URL for all endpoints in this class.
- */
 @RestController
 @RequestMapping("/api/accounts")
 public class AccountController {
-
     private final AccountService accountService;
+    public AccountController(AccountService accountService) { this.accountService = accountService; }
+    public record CreateAccountRequest(@NotBlank String name, @Email @NotBlank String email,
+        @NotBlank String accountType, @PositiveOrZero BigDecimal initialBalance) {}
 
-    public AccountController(AccountService accountService) {
-        this.accountService = accountService;
-    }
-
-    /**
-     * POST /api/accounts
-     * @Valid ensures the incoming JSON matches the constraints in the Account entity (e.g. @NotBlank).
-     */
     @PostMapping
-    public ResponseEntity<Account> createAccount(@Valid @RequestBody Account account) {
-        Account created = accountService.createAccount(account);
-        return new ResponseEntity<>(created, HttpStatus.CREATED); // 201 Created
+    @ResponseStatus(HttpStatus.CREATED)
+    public Account createAccount(@Valid @RequestBody CreateAccountRequest request) {
+        Account account = new Account(request.name(), request.initialBalance() == null ? BigDecimal.ZERO : request.initialBalance());
+        account.setAccountType(request.accountType().trim().toUpperCase());
+        account.setUser(new User(request.name(), request.email()));
+        return accountService.createAccount(account);
     }
-
     @GetMapping
-    public ResponseEntity<List<Account>> getAllAccounts() {
-        return ResponseEntity.ok(accountService.getAllAccounts()); // 200 OK
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<Account> getAccount(@PathVariable Long id) {
-        return ResponseEntity.ok(accountService.getAccount(id));
-    }
-
-    /**
-     * POST /api/accounts/{id}/deposit
-     * Expects JSON like: {"amount": 100.50}
-     */
-    @PostMapping("/{id}/deposit")
-    public ResponseEntity<Account> deposit(@PathVariable Long id, @RequestBody Map<String, BigDecimal> request) {
-        BigDecimal amount = request.get("amount");
-        if (amount == null) {
-            throw new IllegalArgumentException("Amount is required");
-        }
-        Account updatedAccount = accountService.deposit(id, amount);
-        return ResponseEntity.ok(updatedAccount);
-    }
-
-    /**
-     * POST /api/accounts/{id}/withdraw
-     * Expects JSON like: {"amount": 50.00}
-     */
-    @PostMapping("/{id}/withdraw")
-    public ResponseEntity<Account> withdraw(@PathVariable Long id, @RequestBody Map<String, BigDecimal> request) {
-        BigDecimal amount = request.get("amount");
-        if (amount == null) {
-            throw new IllegalArgumentException("Amount is required");
-        }
-        Account updatedAccount = accountService.withdraw(id, amount);
-        return ResponseEntity.ok(updatedAccount);
-    }
+    public List<Account> getAllAccounts() { return accountService.getAllAccounts(); }
+    @GetMapping("/{accountNumber}")
+    public Account getAccount(@PathVariable String accountNumber) { return accountService.getByAccountNumber(accountNumber); }
 }

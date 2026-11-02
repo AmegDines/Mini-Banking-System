@@ -5,6 +5,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
+import com.minibanking.exception.AccountNotFoundException;
+import com.minibanking.exception.InsufficientBalanceException;
 
 /**
  * AccountService handles the business logic.
@@ -23,12 +26,20 @@ public class AccountService {
     }
 
     public Account createAccount(Account account) {
+        if (account.getBalance() == null || account.getBalance().signum() < 0) throw new IllegalArgumentException("Initial balance cannot be negative");
+        if (account.getAccountType() == null || account.getAccountType().isBlank()) account.setAccountType("CHECKING");
+        if (account.getAccountNumber() == null) account.setAccountNumber("MB" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase());
         return accountRepository.save(account);
+    }
+
+    public Account getByAccountNumber(String accountNumber) {
+        return accountRepository.findByAccountNumber(accountNumber)
+            .orElseThrow(() -> new AccountNotFoundException("Account not found: " + accountNumber));
     }
 
     public Account getAccount(Long id) {
         return accountRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Account not found with ID: " + id));
+                .orElseThrow(() -> new AccountNotFoundException("Account not found with ID: " + id));
     }
 
     public List<Account> getAllAccounts() {
@@ -58,10 +69,31 @@ public class AccountService {
 
         Account account = getAccount(accountId);
         if (account.getBalance().compareTo(amount) < 0) {
-            throw new IllegalArgumentException("Insufficient funds for withdrawal");
+            throw new InsufficientBalanceException("Insufficient funds for withdrawal");
         }
 
         account.setBalance(account.getBalance().subtract(amount));
         return accountRepository.save(account);
+    }
+
+    @Transactional
+    public Account depositByNumber(String accountNumber, BigDecimal amount) {
+        validateAmount(amount, "Deposit");
+        Account account = getByAccountNumber(accountNumber);
+        account.setBalance(account.getBalance().add(amount));
+        return accountRepository.save(account);
+    }
+
+    @Transactional
+    public Account withdrawByNumber(String accountNumber, BigDecimal amount) {
+        validateAmount(amount, "Withdrawal");
+        Account account = getByAccountNumber(accountNumber);
+        if (account.getBalance().compareTo(amount) < 0) throw new InsufficientBalanceException("Insufficient balance for this withdrawal");
+        account.setBalance(account.getBalance().subtract(amount));
+        return accountRepository.save(account);
+    }
+
+    private void validateAmount(BigDecimal amount, String operation) {
+        if (amount == null || amount.signum() <= 0) throw new IllegalArgumentException(operation + " amount must be positive");
     }
 }

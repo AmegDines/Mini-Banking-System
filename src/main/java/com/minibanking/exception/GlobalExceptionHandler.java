@@ -3,49 +3,26 @@ package com.minibanking.exception;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import java.time.LocalDateTime;
 
-/**
- * @ControllerAdvice allows us to consolidate our multiple, scattered @ExceptionHandlers 
- * from before into a single, global error handling component.
- */
-@ControllerAdvice
+@RestControllerAdvice
 public class GlobalExceptionHandler {
-
-    // Handle standard generic exceptions (like IllegalArgumentException used for custom validations)
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalArgumentException(IllegalArgumentException ex) {
-        ErrorResponse error = new ErrorResponse(
-            HttpStatus.BAD_REQUEST.value(),
-            ex.getMessage(),
-            System.currentTimeMillis()
-        );
-        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+    @ExceptionHandler(InsufficientBalanceException.class)
+    public ResponseEntity<ErrorResponse> insufficientBalance(InsufficientBalanceException ex) { return error(ex.getMessage(), HttpStatus.BAD_REQUEST); }
+    @ExceptionHandler(AccountNotFoundException.class)
+    public ResponseEntity<ErrorResponse> accountNotFound(AccountNotFoundException ex) { return error(ex.getMessage(), HttpStatus.NOT_FOUND); }
+    @ExceptionHandler({IllegalArgumentException.class, MethodArgumentNotValidException.class})
+    public ResponseEntity<ErrorResponse> badRequest(Exception ex) {
+        String message = ex instanceof MethodArgumentNotValidException validation
+                ? validation.getBindingResult().getFieldErrors().stream().findFirst().map(e -> e.getDefaultMessage()).orElse("Invalid request")
+                : ex.getMessage();
+        return error(message, HttpStatus.BAD_REQUEST);
     }
-
-    // Handle validation errors from @Valid annotations in controllers
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
-        // Just extract the first field error message for simplicity
-        String errorMessage = ex.getBindingResult().getFieldErrors().get(0).getDefaultMessage();
-        
-        ErrorResponse error = new ErrorResponse(
-            HttpStatus.BAD_REQUEST.value(),
-            "Validation Error: " + errorMessage,
-            System.currentTimeMillis()
-        );
-        return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
-    }
-
-    // A fallback handler for any other unhandled exceptions
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGlobalException(Exception ex) {
-        ErrorResponse error = new ErrorResponse(
-            HttpStatus.INTERNAL_SERVER_ERROR.value(),
-            "An unexpected error occurred: " + ex.getMessage(),
-            System.currentTimeMillis()
-        );
-        return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
+    public ResponseEntity<ErrorResponse> unexpected(Exception ex) { return error("An unexpected error occurred", HttpStatus.INTERNAL_SERVER_ERROR); }
+    private ResponseEntity<ErrorResponse> error(String message, HttpStatus status) {
+        return ResponseEntity.status(status).body(new ErrorResponse(LocalDateTime.now(), message, status.value()));
     }
 }
